@@ -1,0 +1,108 @@
+function test_bed()
+s= [1;2];
+stan= [0.05; 0.3];
+n= [50; 100; 500; 1000];
+it= 30;
+N= 400;
+risk= zeros(length(s),length(stan),length(n),it);
+error= zeros(length(s),length(stan),length(n),it);
+for i= 1:length(s)
+    for j= 1:length(stan)
+        z= generate_data(N,stan(j),s(i)); % is it enough to generate one set of test samples?
+        x= z(1:5,:);
+        y= z(6,:);
+        for k= 1:length(n)
+            for l= 1:it
+                w_est= stoc_grad_desc(n(k),s(i),stan(j));
+                y_est= w_est'*[x; ones(1,N)];
+                risk(i,j,k,l)= mean(log(1+exp(-y.*y_est)));
+                y_det= sign(y_est);
+                error(i,j,k,l)= mean(y~=y_det);
+            end
+            
+        end
+        
+    end
+    
+end
+
+mean_risk= mean(risk,4);
+min_risk= min(risk,4);
+std_risk= std(risk,1,4);
+exc_risk= mean_risk-min_risk;
+mean_error= mean(error,4);
+std_error= std(error,1,4);
+dummy= zeros(length(n),1);
+for i= 1:length(s)
+    for j= 1:length(stan)
+        figure
+        dummy(:)= mean_risk(i,j,:);
+        plot(n,dummy)
+        grid minor
+        figure
+        dummy(:)= mean_error(i,j,:);
+        plot(n,dummy)
+        grid minor
+    end
+
+end
+
+end
+
+%%
+function sgd= stoc_grad_desc(n,s,stan)
+M= [2*sqrt(6); 2];
+rho= [sqrt(6); sqrt(2)];
+ss= M(s)/(sqrt(n)*rho(s));
+w= zeros(6,n);
+z= generate_data(n-1,stan,s);
+for i= 2:n
+    w(:,i)= gradient_step(w(:,i-1),z(:,i-1),ss,s);
+end
+
+sgd= mean(w,2);
+end
+
+%%
+function z= generate_data(n,stan,s)
+
+y= 2*randi(2,1,n)-3;
+mean= ones(5,1)*0.2*y;
+dummy= normrnd(mean,stan);
+x= project_data(dummy,s);
+z= [x;y];
+end
+
+%%
+function pd= project_data(x,s)
+if s== 1
+pd= max(min(x,1),-1);
+else
+pd= x./(ones(5,1)*max(sqrt(sum(x.^2)),1));
+end
+
+end
+
+%%
+function gs= gradient_step(w,z,ss,s)
+g= gradient(w,z);
+dummy= w-ss*g;
+gs= project_parameter(dummy,s);
+end
+
+%%
+function g= gradient(w,z)
+x= z(1:5);
+y= z(6);
+g= -y*1/(1+exp(y*w'*[x;1]))*[x;1];
+end
+
+%%
+function pp= project_parameter(w,s)
+if s== 1
+pp= max(min(w,1),-1);
+else
+pp= w/max(sqrt(sum(w.^2)),1);
+end
+
+end
